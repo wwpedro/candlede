@@ -1,0 +1,2 @@
+ALTER TABLE products
+    ADD COLUMN line VARCHAR(100);
