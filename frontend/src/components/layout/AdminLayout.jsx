@@ -15,10 +15,12 @@ const NAV = [
   { section: 'Vendas', items: [
     { to: '/admin/pedidos', label: 'Pedidos' },
   ]},
+  /*
   { section: 'Conteúdo', items: [
     { to: '/admin/banners', label: 'Banners' },
     { to: '/admin/textos', label: 'Textos' },
   ]},
+  */
   { section: 'Clientes', items: [
     { to: '/admin/clientes', label: 'Clientes' },
   ]},

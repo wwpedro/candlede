@@ -7,8 +7,8 @@ import {
   IconSearch, IconUser, IconCart, IconMenu, IconClose,
 } from '../ui/Icons.jsx'
 import { categories } from '../../data/catalog.js'
-// IMPORTANTE: Importações para o autocomplete funcionar
-import { catalogApi } from '../../services/api.js'
+// IMPORTANTE: Importações para o autocomplete e notificações
+import { catalogApi, orderApi } from '../../services/api.js'
 import { adaptProductList } from '../../services/adapters.js'
 
 const links = [
@@ -23,6 +23,10 @@ export default function Navbar() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [userMenu, setUserMenu] = useState(false)
   const [catMenu, setCatMenu] = useState(false)
+  
+  // ESTADO DO SINO DE NOTIFICAÇÃO
+  const [pendingOrders, setPendingOrders] = useState(0)
+
   const { count } = useCart()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -45,6 +49,17 @@ export default function Navbar() {
     document.body.style.overflow = open || searchOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [open, searchOpen])
+
+  // BUSCA NOTIFICAÇÕES (Só se for cliente logado)
+  useEffect(() => {
+    if (user && user.role === 'customer') {
+      orderApi.getPendingConfirmationCount()
+        .then((res) => setPendingOrders(res.count))
+        .catch((err) => console.error("Erro ao buscar notificações", err))
+    } else {
+      setPendingOrders(0) // Se não for cliente, esconde o sino
+    }
+  }, [user])
 
   const linkClass = ({ isActive }) =>
     `site-header__link${isActive ? ' is-active' : ''}`
@@ -119,6 +134,28 @@ export default function Navbar() {
               <IconSearch />
             </button>
 
+            {/* ==========================================
+                SINO DE NOTIFICAÇÃO (Só aparece se for cliente logado)
+                ========================================== */}
+            {user && user.role === 'customer' && (
+              <Link 
+                to="/meus-pedidos" 
+                className="icon-btn cart-btn" 
+                aria-label="Notificações" 
+                title={pendingOrders > 0 ? "Você tem pedidos para confirmar!" : "Nenhuma notificação"}
+              >
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 01-3.46 0" />
+                </svg>
+                {pendingOrders > 0 && (
+                  <span className="cart-btn__count" style={{ background: '#e74c3c', top: '-4px', right: '-4px' }}>
+                    {pendingOrders}
+                  </span>
+                )}
+              </Link>
+            )}
+
             <div className="site-header__dropdown" ref={userRef}>
               <button
                 className="icon-btn icon-btn--user"
@@ -172,7 +209,9 @@ export default function Navbar() {
               {user ? (
                 <>
                   <NavLink to="/minha-conta" onClick={() => setOpen(false)}>Minha conta</NavLink>
-                  <NavLink to="/meus-pedidos" onClick={() => setOpen(false)}>Meus pedidos</NavLink>
+                  <NavLink to="/meus-pedidos" onClick={() => setOpen(false)}>
+                    Meus pedidos {pendingOrders > 0 && <span style={{ color: '#e74c3c', fontWeight: 'bold' }}>({pendingOrders})</span>}
+                  </NavLink>
                   {user.role === 'admin' && (
                     <NavLink to="/admin" onClick={() => setOpen(false)}>Painel admin</NavLink>
                   )}

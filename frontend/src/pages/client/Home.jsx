@@ -15,7 +15,7 @@ const FALLBACK_BANNER = {
   subtitle: 'Descubra a coleção Candlede.',
   imageUrl: '/images/hero.jpg',
   videoUrl: '/videos/hero.mp4',
-  buttonText: 'Explorar produtos',
+  buttonText: 'Conhecer produtos',
   buttonLink: '/produtos',
 }
 
@@ -26,8 +26,8 @@ const FALLBACK_RITUAL = {
   eyebrow: 'Ritual',
   title: 'Linha de Cuidados',
   text: 'Cada produto foi pensado como um pequeno ritual. Aromas que convidam à pausa, ao cuidado e à presença.',
-  buttonText: 'Conhecer coleção',
-  buttonLink: '/produtos',
+  buttonText: 'Explorar Coleção',
+  buttonLink: '/categorias/cuidados-com-a-pele',
   image: '/images/ritual.jpg', // <-- Corrigido com a barra no início
 }
 

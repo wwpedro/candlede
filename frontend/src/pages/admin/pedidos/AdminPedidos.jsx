@@ -19,6 +19,7 @@ const STATUS_LABEL = {
   preparing: 'Preparando',
   shipped: 'Enviado',
   delivered: 'Entregue',
+  completed: 'Concluído',
   canceled: 'Cancelado',
 }
 
@@ -27,6 +28,7 @@ const STATUS_TONE = {
   preparing: 'dark',
   shipped: 'muted',
   delivered: 'muted',
+  completed: 'dark',
   canceled: 'muted',
 }
 
@@ -86,6 +88,7 @@ export default function AdminPedidos() {
           <option value="preparing">Preparando</option>
           <option value="shipped">Enviado</option>
           <option value="delivered">Entregue</option>
+          <option value="completed">Concluído</option>
           <option value="canceled">Cancelado</option>
         </select>
       </div>

@@ -3928,3 +3928,11 @@ input[type="number"] {
   color: var(--color-text-secondary);
   margin: 0;
 }
+
+/* Estrelas de Avaliação */
+.star-rating span {
+  transition: color 0.2s;
+}
+.star-rating span:hover {
+  transform: scale(1.1);
+}

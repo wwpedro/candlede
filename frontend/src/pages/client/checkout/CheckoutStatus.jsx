@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useLocation } from 'react-router-dom'
 import { orderApi, paymentApi } from '../../../services/api.js'
 import { adaptOrder } from '../../../services/adapters.js'
+import { useCart } from '../../../context/CartContext.jsx' // Importando o Cart
 
 function formatBRL(v) {
   return `R$ ${Number(v).toFixed(2).replace('.', ',')}`
@@ -38,6 +39,7 @@ export default function CheckoutStatus() {
   const { id } = useParams()
   const location = useLocation()
   const transactionId = location.state?.transactionId
+  const { refresh: refreshCart } = useCart() // Pegando a função de atualizar carrinho
 
   const [order, setOrder] = useState(null)
   const [payment, setPayment] = useState(null)
@@ -55,6 +57,11 @@ export default function CheckoutStatus() {
         if (!mounted) return
         const adapted = adaptOrder(orderData)
         setOrder(adapted)
+
+        // MÁGICA AQUI: Se o pagamento acabou de ser aprovado, limpa o carrinho no Front
+        if (adapted.payment.status === 'approved') {
+          refreshCart()
+        }
 
         if (transactionId) {
           try {
@@ -78,7 +85,7 @@ export default function CheckoutStatus() {
 
     load()
     return () => { mounted = false; clearTimeout(timer) }
-  }, [id, transactionId])
+  }, [id, transactionId, refreshCart])
 
   const copy = async () => {
     const text = payment?.qrCodeText

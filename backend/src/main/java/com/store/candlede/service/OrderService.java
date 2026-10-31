@@ -16,13 +16,18 @@ import com.store.candlede.exception.ResourceNotFoundException;
 import com.store.candlede.repository.CartRepository;
 import com.store.candlede.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderService {
@@ -33,53 +38,36 @@ public class OrderService {
     private final CartService cartService;
     private final InventoryService inventoryService;
     private final AuditService auditService;
-    
-    // Injeção do serviço de frete
     private final ShippingService shippingService;
+    private final JavaMailSender mailSender; // <-- IMPORTANTE: Injeção do envio de e-mail
 
-    // =========================================================
-    // CRIAR PEDIDO
-    // =========================================================
     @Transactional
     public OrderResponse create(Long userId, CreateOrderRequest request) {
-
         User user = userService.getEntityById(userId);
         Cart cart = cartService.getOrCreateCart(userId);
 
         if (cart.getItems().isEmpty()) {
-            throw new BusinessException(
-                    "Não é possível realizar um pedido com o carrinho vazio."
-            );
+            throw new BusinessException("Não é possível realizar um pedido com o carrinho vazio.");
         }
 
         for (CartItem cartItem : cart.getItems()) {
             Product product = cartItem.getProduct();
-
             if (!product.getActive()) {
-                throw new BusinessException(
-                        "O produto " + product.getName() + " não está mais disponível."
-                );
+                throw new BusinessException("O produto " + product.getName() + " não está mais disponível.");
             }
 
-            int stock = inventoryService
-                    .findByProductId(product.getId())
-                    .quantity();
-
+            int stock = inventoryService.findByProductId(product.getId()).quantity();
             if (stock < cartItem.getQuantity()) {
-                throw new BusinessException(
-                        "Estoque insuficiente para o produto: " + product.getName()
-                );
+                throw new BusinessException("Estoque insuficiente para o produto: " + product.getName());
             }
         }
 
         BigDecimal subtotal = BigDecimal.ZERO;
         for (CartItem item : cart.getItems()) {
-            BigDecimal itemSubtotal = item.getProduct().getPrice()
-                    .multiply(BigDecimal.valueOf(item.getQuantity()));
+            BigDecimal itemSubtotal = item.getProduct().getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
             subtotal = subtotal.add(itemSubtotal);
         }
 
-        // Frete é calculado pelo ShippingService com base no CEP
         BigDecimal shippingPrice = shippingService.calcularFrete(request.cep(), subtotal);
         BigDecimal total = subtotal.add(shippingPrice);
 
@@ -109,9 +97,7 @@ public class OrderService {
         for (CartItem cartItem : cart.getItems()) {
             Product product = cartItem.getProduct();
             BigDecimal unitPrice = product.getPrice();
-            BigDecimal itemSubtotal = unitPrice.multiply(
-                    BigDecimal.valueOf(cartItem.getQuantity())
-            );
+            BigDecimal itemSubtotal = unitPrice.multiply(BigDecimal.valueOf(cartItem.getQuantity()));
 
             OrderItem orderItem = OrderItem.builder()
                     .order(order)
@@ -123,207 +109,117 @@ public class OrderService {
                     .build();
 
             order.getItems().add(orderItem);
-
-            inventoryService.removeForSale(
-                    product,
-                    cartItem.getQuantity(),
-                    order
-            );
         }
-
+        
         orderRepository.save(order);
-
-        // Limpa o carrinho
-        cart.getItems().clear();
-        cartRepository.save(cart);
-        cartRepository.flush(); // <--- GARANTE A LIMPEZA IMEDIATA NO BANCO DE DADOS
-
-        // =========================================================
-        // AUDITORIA
-        // =========================================================
-        auditService.log(
-                "ORDER_CREATE",
-                "Order",
-                order.getId(),
-                "Novo pedido #" + order.getId()
-                        + " - Total: R$ " + order.getTotal()
-                        + " - " + order.getItems().size() + " item(s)"
-        );
+        
+        auditService.log("ORDER_CREATE", "Order", order.getId(), "Novo pedido #" + order.getId() + " - Total: R$ " + order.getTotal());
 
         return toResponse(order);
     }
     
     @Transactional(readOnly = true)
     public Order findEntity(Long id) {
-        return orderRepository.findById(id)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Pedido não encontrado.")
-                );
+        return orderRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Pedido não encontrado."));
     }
 
-    // =========================================================
-    // LEITURA
-    // =========================================================
     @Transactional(readOnly = true)
     public List<OrderResponse> findByUser(Long userId) {
-        return orderRepository
-                .findByUserIdOrderByCreatedAtDesc(userId)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId).stream().map(this::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
     public OrderResponse findByUser(Long orderId, Long userId) {
-        Order order = orderRepository
-                .findByIdAndUserId(orderId, userId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Pedido não encontrado.")
-                );
+        Order order = orderRepository.findByIdAndUserId(orderId, userId).orElseThrow(() -> new ResourceNotFoundException("Pedido não encontrado."));
         return toResponse(order);
     }
 
     @Transactional(readOnly = true)
     public List<OrderResponse> findAllForAdmin() {
-        return orderRepository
-                .findAllByOrderByCreatedAtDesc()
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return orderRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
     public OrderResponse findByIdForAdmin(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Pedido não encontrado.")
-                );
+        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Pedido não encontrado."));
+        return toResponse(order);
+    }
+    
+    @Transactional
+    public OrderResponse confirmDelivery(Long orderId, Long userId) {
+        Order order = orderRepository.findByIdAndUserId(orderId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido não encontrado."));
+
+        if (order.getStatus() != OrderStatus.DELIVERED) {
+            throw new BusinessException("Apenas pedidos entregues podem ser confirmados.");
+        }
+
+        order.setStatus(OrderStatus.COMPLETED);
+        order.setDeliveryConfirmedAt(LocalDateTime.now());
+        orderRepository.save(order);
+
+        auditService.log("ORDER_COMPLETED", "Order", order.getId(), "Cliente confirmou o recebimento.");
+        
         return toResponse(order);
     }
 
-    // =========================================================
-    // ATUALIZAR STATUS
-    // =========================================================
     @Transactional
     public OrderResponse updateStatus(Long orderId, OrderStatus newStatus) {
-
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Pedido não encontrado.")
-                );
+        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Pedido não encontrado."));
 
         OrderStatus currentStatus = order.getStatus();
-
         validateStatusTransition(currentStatus, newStatus);
 
-        if (newStatus == OrderStatus.CANCELLED
-                && currentStatus != OrderStatus.CANCELLED) {
-
-            for (OrderItem item : order.getItems()) {
-                inventoryService.returnForCancelledOrder(
-                        item.getProduct(),
-                        item.getQuantity(),
-                        order
-                );
+        if (newStatus == OrderStatus.CANCELLED && currentStatus != OrderStatus.CANCELLED) {
+            // Só devolve ao estoque se o pedido já tinha sido pago (estoque já tinha sido tirado)
+            if (order.getPaymentStatus() == PaymentStatus.APPROVED) {
+                for (OrderItem item : order.getItems()) {
+                    inventoryService.returnForCancelledOrder(item.getProduct(), item.getQuantity(), order);
+                }
             }
         }
 
         order.setStatus(newStatus);
         orderRepository.save(order);
+        
+        if (newStatus == OrderStatus.DELIVERED) {
+            try {
+                SimpleMailMessage msg = new SimpleMailMessage();
+                msg.setTo(order.getCustomerEmail());
+                msg.setSubject("Seu pedido #" + order.getId() + " chegou! 📦");
+                msg.setText("Olá, " + order.getCustomerName() + "!\n\n" +
+                        "Seu pedido foi entregue. Acesse sua conta para confirmar o recebimento e deixar sua avaliação.\n\n" +
+                        "Atenciosamente, Candlede.");
+                mailSender.send(msg);
+            } catch (Exception e) {
+                log.warn("Erro ao enviar email de entrega para o pedido {}", order.getId());
+            }
+        }
 
-        // =========================================================
-        // AUDITORIA
-        // =========================================================
-        String action = newStatus == OrderStatus.CANCELLED
-                ? "ORDER_CANCEL"
-                : "ORDER_STATUS_CHANGE";
-
-        auditService.log(
-                action,
-                "Order",
-                order.getId(),
-                "Pedido #" + order.getId() + ": " + currentStatus + " → " + newStatus
-        );
+        String action = newStatus == OrderStatus.CANCELLED ? "ORDER_CANCEL" : "ORDER_STATUS_CHANGE";
+        auditService.log(action, "Order", order.getId(), "Pedido #" + order.getId() + ": " + currentStatus + " → " + newStatus);
 
         return toResponse(order);
     }
 
-    // =========================================================
-    // VALIDAÇÕES
-    // =========================================================
     private void validateStatusTransition(OrderStatus current, OrderStatus next) {
-
-        if (current == OrderStatus.CANCELLED) {
-            throw new BusinessException(
-                    "Um pedido cancelado não pode voltar ao fluxo normal."
-            );
-        }
-
-        if (current == OrderStatus.DELIVERED) {
-            throw new BusinessException(
-                    "Um pedido entregue não pode ter o status alterado."
-            );
-        }
-
-        if (current == OrderStatus.RECEIVED
-                && next != OrderStatus.PREPARING
-                && next != OrderStatus.CANCELLED) {
-            throw new BusinessException("Transição de status inválida.");
-        }
-
-        if (current == OrderStatus.PREPARING
-                && next != OrderStatus.SHIPPED
-                && next != OrderStatus.CANCELLED) {
-            throw new BusinessException("Transição de status inválida.");
-        }
-
-        if (current == OrderStatus.SHIPPED
-                && next != OrderStatus.DELIVERED) {
-            throw new BusinessException("Transição de status inválida.");
-        }
+        if (current == OrderStatus.CANCELLED) throw new BusinessException("Um pedido cancelado não pode voltar ao fluxo normal.");
+        if (current == OrderStatus.DELIVERED) throw new BusinessException("Um pedido entregue não pode ter o status alterado.");
+        if (current == OrderStatus.RECEIVED && next != OrderStatus.PREPARING && next != OrderStatus.CANCELLED) throw new BusinessException("Transição de status inválida.");
+        if (current == OrderStatus.PREPARING && next != OrderStatus.SHIPPED && next != OrderStatus.CANCELLED) throw new BusinessException("Transição de status inválida.");
+        if (current == OrderStatus.SHIPPED && next != OrderStatus.DELIVERED) throw new BusinessException("Transição de status inválida.");
     }
 
-    // =========================================================
-    // TO RESPONSE
-    // =========================================================
     private OrderResponse toResponse(Order order) {
-
-        List<OrderItemResponse> items = order.getItems()
-                .stream()
-                .map(item ->
-                        new OrderItemResponse(
-                                item.getId(),
-                                item.getProduct().getId(),
-                                item.getProductName(),
-                                item.getProduct().getImageUrl(),
-                                item.getQuantity(),
-                                item.getUnitPrice(),
-                                item.getSubtotal()
-                        )
-                )
+        List<OrderItemResponse> items = order.getItems().stream()
+                .map(item -> new OrderItemResponse(item.getId(), item.getProduct().getId(), item.getProductName(), item.getProduct().getImageUrl(), item.getQuantity(), item.getUnitPrice(), item.getSubtotal()))
                 .toList();
 
         return new OrderResponse(
-                order.getId(),
-                order.getUser().getId(),
-                order.getCustomerName(),
-                order.getCustomerEmail(),
-                order.getCustomerPhone(),
-                order.getSubtotal(),
-                order.getShippingPrice(),
-                order.getTotal(),
-                order.getStatus(),
-                order.getPaymentStatus(),
-                order.getPaymentMethod(),
-                order.getCep(),
-                order.getStreet(),
-                order.getNumber(),
-                order.getComplement(),
-                order.getNeighborhood(),
-                order.getCity(),
-                order.getState(),
-                items,
-                order.getCreatedAt()
+                order.getId(), order.getUser().getId(), order.getCustomerName(), order.getCustomerEmail(), order.getCustomerPhone(),
+                order.getSubtotal(), order.getShippingPrice(), order.getTotal(), order.getStatus(), order.getPaymentStatus(),
+                order.getPaymentMethod(), order.getCep(), order.getStreet(), order.getNumber(), order.getComplement(),
+                order.getNeighborhood(), order.getCity(), order.getState(), items, order.getCreatedAt()
         );
     }
 }

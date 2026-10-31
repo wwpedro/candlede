@@ -183,6 +183,35 @@ public class InventoryService {
     }
 
     @Transactional
+    public void removeForSaleWithLock(Product product, Integer quantity, com.store.candlede.entity.Order order) {
+        Inventory inventory = inventoryRepository
+                .findByProductIdWithLock(product.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Estoque do produto não encontrado."));
+
+        int previous = inventory.getQuantity();
+
+        if (previous < quantity) {
+            throw new BusinessException("Estoque esgotado para o produto: " + product.getName());
+        }
+
+        int current = previous - quantity;
+        inventory.setQuantity(current);
+        inventoryRepository.save(inventory);
+
+        StockMovement movement = StockMovement.builder()
+                .inventory(inventory)
+                .order(order)
+                .movementType(StockMovementType.SALE)
+                .quantity(quantity)
+                .previousQuantity(previous)
+                .newQuantity(current)
+                .reason("Venda aprovada do pedido #" + order.getId())
+                .build();
+        stockMovementRepository.save(movement);
+    }
+
+    
+    @Transactional
     public void returnForCancelledOrder(
             Product product,
             Integer quantity,

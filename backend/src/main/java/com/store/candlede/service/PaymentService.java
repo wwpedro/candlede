@@ -4,11 +4,13 @@ import com.mercadopago.resources.payment.Payment;
 import com.store.candlede.dto.CreatePaymentRequest;
 import com.store.candlede.dto.PaymentResponse;
 import com.store.candlede.entity.Order;
+import com.store.candlede.entity.OrderItem;
 import com.store.candlede.enums.OrderStatus;
 import com.store.candlede.enums.PaymentMethod;
 import com.store.candlede.enums.PaymentStatus;
 import com.store.candlede.exception.BusinessException;
 import com.store.candlede.exception.ResourceNotFoundException;
+import com.store.candlede.repository.OrderRepository;
 import com.store.candlede.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -25,9 +27,14 @@ public class PaymentService {
     private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     private final PaymentRepository paymentRepository;
+    private final OrderRepository orderRepository;
     private final OrderService orderService;
     private final AuditService auditService;
     private final MercadoPagoService mercadoPagoService;
+    
+    // Injeções para a nova regra de negócio
+    private final CartService cartService;
+    private final InventoryService inventoryService;
 
     // =========================================================
     // PROCESSAR PAGAMENTO
@@ -147,8 +154,8 @@ public class PaymentService {
         payment = paymentRepository.save(payment);
 
         if (aprovado) {
-            order.setPaymentStatus(PaymentStatus.APPROVED);
-            order.setStatus(OrderStatus.PREPARING);
+            // Chama a nova regra centralizada
+            finalizarPagamentoAprovado(order);
         }
 
         auditService.log(
@@ -197,8 +204,9 @@ public class PaymentService {
         paymentRepository.save(payment);
 
         Order order = payment.getOrder();
-        order.setPaymentStatus(PaymentStatus.APPROVED);
-        order.setStatus(OrderStatus.PREPARING);
+        
+        // Chama a nova regra centralizada
+        finalizarPagamentoAprovado(order);
 
         auditService.log(
                 "PAYMENT_SIMULATED",
@@ -243,8 +251,9 @@ public class PaymentService {
 
             if (mapped == PaymentStatus.APPROVED) {
                 Order order = payment.getOrder();
-                order.setPaymentStatus(PaymentStatus.APPROVED);
-                order.setStatus(OrderStatus.PREPARING);
+                
+                // Chama a nova regra centralizada
+                finalizarPagamentoAprovado(order);
 
                 auditService.log(
                         "PAYMENT_APPROVED",
@@ -258,6 +267,37 @@ public class PaymentService {
 
         } catch (Exception e) {
             log.error("Erro ao processar webhook MP", e);
+        }
+    }
+
+    // =========================================================
+    // REGRA DE NEGÓCIO CENTRALIZADA PARA PAGAMENTO APROVADO
+    // =========================================================
+    private void finalizarPagamentoAprovado(Order order) {
+        try {
+            // Tenta tirar do estoque usando a trava (Lock) de segurança
+            for (OrderItem item : order.getItems()) {
+                inventoryService.removeForSaleWithLock(item.getProduct(), item.getQuantity(), order);
+            }
+            
+            // Se conseguiu tirar tudo do estoque, limpa o carrinho
+            cartService.clear(order.getUser().getId());
+            
+            // Atualiza os status do pedido
+            order.setPaymentStatus(PaymentStatus.APPROVED);
+            order.setStatus(OrderStatus.PREPARING);
+            orderRepository.save(order);
+            
+            log.info("✅ Pagamento aprovado e estoque reservado para o pedido #{}", order.getId());
+            
+        } catch (BusinessException e) {
+            // Se cair aqui, o estoque acabou enquanto o cliente estava no checkout/pagando
+            order.setPaymentStatus(PaymentStatus.REFUNDED); 
+            order.setStatus(OrderStatus.CANCELLED);
+            orderRepository.save(order);
+            
+            log.warn("❌ Estoque esgotado ao aprovar pedido #{}. Motivo: {}", order.getId(), e.getMessage());
+            // O ideal seria enviar um e-mail pro cliente avisando do estorno aqui
         }
     }
 

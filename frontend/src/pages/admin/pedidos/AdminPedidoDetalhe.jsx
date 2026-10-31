@@ -22,6 +22,7 @@ const STATUS_LABEL = {
   preparing: 'Preparando',
   shipped: 'Enviado',
   delivered: 'Entregue',
+  completed: 'Concluído',
   canceled: 'Cancelado',
 }
 
@@ -30,10 +31,11 @@ const STATUS_OPTIONS = [
   { value: 'PREPARING', label: 'Preparando' },
   { value: 'SHIPPED', label: 'Enviado' },
   { value: 'DELIVERED', label: 'Entregue' },
+  { value: 'COMPLETED', label: 'Concluído' },
   { value: 'CANCELLED', label: 'Cancelado' },
 ]
 
-const STATUS_FLOW = ['received', 'preparing', 'shipped', 'delivered']
+const STATUS_FLOW = ['received', 'preparing', 'shipped', 'delivered', 'completed']
 
 export default function AdminPedidoDetalhe() {
   const { id } = useParams()
@@ -97,6 +99,7 @@ export default function AdminPedidoDetalhe() {
 
   const currentIndex = STATUS_FLOW.indexOf(order.status)
   const isCanceled = order.status === 'canceled'
+  const isCompleted = order.status === 'completed' // <-- NOVO: Trava de segurança
   const isDangerous = status === 'CANCELLED'
 
   return (
@@ -111,7 +114,9 @@ export default function AdminPedidoDetalhe() {
       <section className="admin-block">
         <header className="admin-block__head">
           <h2 className="admin-block__title">Status do pedido</h2>
-          <StatusBadge tone="dark">{STATUS_LABEL[order.status]}</StatusBadge>
+          <StatusBadge tone={isCompleted ? 'dark' : 'default'}>
+            {STATUS_LABEL[order.status]}
+          </StatusBadge>
         </header>
 
         {isCanceled ? (
@@ -127,12 +132,19 @@ export default function AdminPedidoDetalhe() {
           </ol>
         )}
 
+        {/* AVISO: O cliente já confirmou o recebimento */}
+        {isCompleted && (
+          <p className="text-muted" style={{ marginTop: 16, color: '#27ae60', fontWeight: 500 }}>
+            ✓ O cliente já confirmou o recebimento deste pedido.
+          </p>
+        )}
+
         <div className="admin-actions-row">
           <select
             className="input admin-filters__select"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            disabled={isCanceled}
+            disabled={isCanceled || isCompleted} // Trava o select se já estiver concluído
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
@@ -141,7 +153,7 @@ export default function AdminPedidoDetalhe() {
           <Button
             variant="primary"
             onClick={handleUpdate}
-            disabled={saving || isCanceled || status === order.status.toUpperCase()}
+            disabled={saving || isCanceled || isCompleted || status === order.status.toUpperCase()} // Trava o botão
           >
             Atualizar status
           </Button>

@@ -18,6 +18,7 @@ const STATUS_LABEL = {
   preparing: 'Preparando',
   shipped:   'Enviado',
   delivered: 'Entregue',
+  completed: 'Concluído',
   canceled:  'Cancelado',
 }
 
@@ -91,9 +92,26 @@ export default function MeusPedidos() {
                   <p className="order-card__id">Pedido #{o.id}</p>
                   <p className="order-card__date">{formatDate(o.date)}</p>
                 </div>
-                <span className={`status-dot status-dot--${o.status}`}>
-                  {STATUS_LABEL[o.status]}
-                </span>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                  <span className={`status-dot status-dot--${o.status}`}>
+                    {STATUS_LABEL[o.status]}
+                  </span>
+                  
+                  {/* AVISO PARA CONFIRMAR ENTREGA */}
+                  {o.status === 'delivered' && (
+                    <Link to={`/meus-pedidos/${o.id}`} style={{ fontSize: '12px', color: '#e67e22', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      ⚠️ Confirmar recebimento
+                    </Link>
+                  )}
+                  
+                  {/* AVISO PARA AVALIAR */}
+                  {o.status === 'completed' && (
+                    <Link to={`/meus-pedidos/${o.id}`} style={{ fontSize: '12px', color: '#d35400', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      ⚠️ Avaliar pedido
+                    </Link>
+                  )}
+                </div>
               </div>
 
               <div className="order-card__meta">

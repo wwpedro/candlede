@@ -162,6 +162,7 @@ const STATUS_TO_FRONT = {
   PREPARING: 'preparing',
   SHIPPED: 'shipped',
   DELIVERED: 'delivered',
+  COMPLETED: 'completed',
   CANCELLED: 'canceled',
 }
 

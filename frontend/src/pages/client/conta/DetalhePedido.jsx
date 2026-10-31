@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { orderApi } from '../../../services/api.js'
+import { orderApi, reviewApi } from '../../../services/api.js'
 import { adaptOrder } from '../../../services/adapters.js'
 
 function formatBRL(v) {
@@ -13,13 +13,14 @@ function formatDate(iso) {
   })
 }
 
-const STEPS = ['received', 'paid', 'preparing', 'shipped', 'delivered']
+const STEPS = ['received', 'paid', 'preparing', 'shipped', 'delivered', 'completed']
 const STEP_LABEL = {
   received:  'Pedido recebido',
   paid:      'Pagamento confirmado',
   preparing: 'Preparando',
   shipped:   'Enviado',
   delivered: 'Entregue',
+  completed: 'Concluído'
 }
 
 export default function DetalhePedido() {
@@ -28,21 +29,85 @@ export default function DetalhePedido() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    let mounted = true
+  // Estados para a confirmação de entrega
+  const [confirming, setConfirming] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+
+  // Estados para as avaliações
+  const [reviewsState, setReviewsState] = useState({})
+
+  const loadOrder = () => {
     orderApi.get(id)
-      .then((data) => {
-        if (mounted) setOrder(adaptOrder(data))
-      })
+      .then((data) => setOrder(adaptOrder(data)))
       .catch((err) => {
         console.error(err)
-        if (mounted) setError('Pedido não encontrado.')
+        setError('Pedido não encontrado.')
       })
-      .finally(() => {
-        if (mounted) setLoading(false)
-      })
-    return () => { mounted = false }
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadOrder()
   }, [id])
+
+  // ---------- CONFIRMAR ENTREGA ----------
+  const handleConfirmDelivery = async () => {
+    setConfirming(true)
+    try {
+      await orderApi.confirmDelivery(id)
+      setShowConfirmModal(false)
+      loadOrder() 
+    } catch (err) {
+      alert(err.response?.data?.message || "Erro ao confirmar a entrega. Tente novamente.")
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  // ---------- AVALIAÇÃO ----------
+  const handleReviewChange = (productId, field, value) => {
+    setReviewsState((prev) => ({
+      ...prev,
+      [productId]: {
+        ...prev[productId],
+        [field]: value
+      }
+    }))
+  }
+
+  const handleSubmitReview = async (e, productId) => {
+    e.preventDefault()
+    const state = reviewsState[productId]
+    
+    if (!state?.rating) {
+      return alert("Por favor, escolha de 1 a 5 estrelas.")
+    }
+
+    setReviewsState(prev => ({
+      ...prev,
+      [productId]: { ...prev[productId], loading: true }
+    }))
+
+    try {
+      await reviewApi.create({
+        orderId: Number(id),
+        productId,
+        rating: state.rating,
+        comment: state.comment || ''
+      })
+      
+      setReviewsState(prev => ({
+        ...prev,
+        [productId]: { ...prev[productId], loading: false, submitted: true }
+      }))
+    } catch (err) {
+      alert(err.response?.data?.message || "Erro ao enviar avaliação.")
+      setReviewsState(prev => ({
+        ...prev,
+        [productId]: { ...prev[productId], loading: false }
+      }))
+    }
+  }
 
   if (loading) {
     return (
@@ -63,14 +128,10 @@ export default function DetalhePedido() {
 
   const isCanceled = order.status === 'canceled'
   const isPaid = order.payment.status === 'approved'
-  const isPreparing = ['preparing', 'shipped', 'delivered'].includes(order.status)
-
-  // Índice atual da timeline
-  let currentIndex = STEPS.indexOf(order.status === 'received' ? 'received' : order.status)
+  
+  let currentIndex = STEPS.indexOf(order.status)
   if (order.status === 'received' && isPaid) currentIndex = 1
 
-  // ---------- AVISO DE 24H ----------
-  // Mostra quando: pagamento aprovado + pedido ainda recebido (não começou a preparar)
   const showPreparingNotice = isPaid && order.status === 'received' && !isCanceled
 
   return (
@@ -82,7 +143,6 @@ export default function DetalhePedido() {
         <p className="account-page__subtitle">{formatDate(order.date)}</p>
       </header>
 
-      {/* ---------- AVISO DE 24H ---------- */}
       {showPreparingNotice && (
         <section className="order-notice">
           <div className="order-notice__icon">⏱</div>
@@ -121,24 +181,103 @@ export default function DetalhePedido() {
         )}
       </section>
 
-      {/* ---------- ITENS ---------- */}
+      {/* ---------- CONFIRMAR ENTREGA ---------- */}
+      {order.status === 'delivered' && (
+        <section className="order-notice" style={{ background: 'var(--color-background)', borderLeft: '3px solid #27ae60' }}>
+          <div className="order-notice__content" style={{ width: '100%', textAlign: 'center', padding: '10px 0' }}>
+            <p className="order-notice__title" style={{ fontSize: 16 }}>O pedido chegou até você?</p>
+            <p className="order-notice__text" style={{ marginBottom: 16 }}>Confirme o recebimento para liberar sua avaliação.</p>
+            <button 
+              className="btn btn--primary" 
+              onClick={() => setShowConfirmModal(true)}
+            >
+              Sim, recebi meu pedido
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* ---------- ITENS E AVALIAÇÕES ---------- */}
       <section className="order-section">
         <h2 className="section-label">Produtos</h2>
         <div className="order-items">
-          {order.items.map((it) => (
-            <div key={it.id} className="order-item">
-              <div className="order-item__media">
-                <img src={it.image} alt={it.name} />
+          {order.items.map((it) => {
+            const state = reviewsState[it.productId] || { rating: 0, comment: '', submitted: false, loading: false }
+
+            return (
+              <div key={it.id} className="order-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                
+                {/* Info do Produto */}
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                  <div className="order-item__media">
+                    <img src={it.image} alt={it.name} />
+                  </div>
+                  <div className="order-item__info" style={{ flex: 1 }}>
+                    <p className="order-item__name">{it.name}</p>
+                    <p className="order-item__qty">{it.qty} × {formatBRL(it.price)}</p>
+                  </div>
+                  <span className="order-item__total">{formatBRL(it.subtotal)}</span>
+                </div>
+
+                {/* ÁREA DE AVALIAÇÃO */}
+                {order.status === 'completed' && (
+                  <div style={{ 
+                    marginTop: 20, 
+                    padding: 20, 
+                    background: '#f8f8f6', 
+                    borderRadius: 4, 
+                    border: '1px solid #e5e5e5',
+                    width: '100%',
+                    boxSizing: 'border-box'
+                  }}>
+                    {!state.submitted ? (
+                      <form onSubmit={(e) => handleSubmitReview(e, it.productId)}>
+                        <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Avalie este produto:</p>
+                        
+                        {/* Estrelas */}
+                        <div style={{ display: 'flex', gap: 8, fontSize: 28, cursor: 'pointer', marginBottom: 12 }}>
+                          {[1, 2, 3, 4, 5].map(star => (
+                            <span 
+                              key={star} 
+                              onClick={() => handleReviewChange(it.productId, 'rating', star)} 
+                              style={{ color: star <= state.rating ? '#f1c40f' : '#ccc' }}
+                            >
+                              ★
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Comentário */}
+                        <div className="field" style={{ marginBottom: 12 }}>
+                          <textarea 
+                            rows={2} 
+                            value={state.comment} 
+                            onChange={(e) => handleReviewChange(it.productId, 'comment', e.target.value)} 
+                            placeholder="Deixe um comentário (opcional) sobre o cheiro, durabilidade..."
+                            style={{ fontSize: 13, width: '100%' }}
+                          />
+                        </div>
+
+                        <button 
+                          type="submit" 
+                          className="btn btn--primary" 
+                          disabled={state.loading}
+                          style={{ padding: '8px 24px', fontSize: 12 }}
+                        >
+                          {state.loading ? 'Enviando...' : 'Enviar avaliação'}
+                        </button>
+                      </form>
+                    ) : (
+                      <div style={{ textAlign: 'center', color: '#27ae60' }}>
+                        <p style={{ fontSize: 24, margin: '0 0 8px' }}>✓</p>
+                        <p style={{ fontSize: 14, fontWeight: 500 }}>Avaliação enviada com sucesso! Obrigado.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="order-item__info">
-                <p className="order-item__name">{it.name}</p>
-                <p className="order-item__qty">
-                  {it.qty} × {formatBRL(it.price)}
-                </p>
-              </div>
-              <span className="order-item__total">{formatBRL(it.subtotal)}</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 
@@ -188,6 +327,36 @@ export default function DetalhePedido() {
           {order.address.zip}
         </address>
       </section>
+
+      {/* ---------- MODAL DE CONFIRMAÇÃO ---------- */}
+      {showConfirmModal && (
+        <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
+          <div className="modal modal--sm" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>📦</div>
+            <h2 className="modal__title" style={{ marginBottom: 8 }}>Confirmar recebimento</h2>
+            <p className="text-muted" style={{ marginBottom: 24, lineHeight: 1.6 }}>
+              Você confirma que já recebeu os produtos deste pedido? Esta ação não pode ser desfeita.
+            </p>
+            <div className="modal__actions" style={{ justifyContent: 'center' }}>
+              <button 
+                className="btn btn--ghost" 
+                onClick={() => setShowConfirmModal(false)}
+                disabled={confirming}
+              >
+                Ainda não
+              </button>
+              <button 
+                className="btn btn--primary" 
+                onClick={handleConfirmDelivery} 
+                disabled={confirming}
+              >
+                {confirming ? 'Confirmando...' : 'Sim, recebi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

@@ -22,17 +22,17 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-  localStorage.removeItem('candlede:token')
-  localStorage.removeItem('candlede:user')
+      localStorage.removeItem('candlede:token')
+      localStorage.removeItem('candlede:user')
 
-  const path = window.location.pathname
-  const publicRoutes = ['/login', '/cadastro', '/']
-  const isPublic = publicRoutes.includes(path) || path.startsWith('/redefinir')
+      const path = window.location.pathname
+      const publicRoutes = ['/login', '/cadastro', '/']
+      const isPublic = publicRoutes.includes(path) || path.startsWith('/redefinir')
 
-  if (!isPublic) {
-    window.dispatchEvent(new Event('candlede:session-expired'))
-  }
-}
+      if (!isPublic) {
+        window.dispatchEvent(new Event('candlede:session-expired'))
+      }
+    }
     return Promise.reject(error)
   }
 )
@@ -143,6 +143,7 @@ export const cartApi = {
   clear: () =>
     api.delete('/cart').then((r) => r.data),
 }
+
 // ============================================================
 // ENDEREÇOS (só CUSTOMER)
 // ============================================================
@@ -183,6 +184,26 @@ export const orderApi = {
 
   get: (id) =>
     api.get(`/orders/${id}`).then((r) => r.data),
+
+  // ============================================================
+  // NOVO: CONFIRMAR ENTREGA
+  // ============================================================
+  confirmDelivery: (id) =>
+    api.patch(`/orders/${id}/confirm-delivery`).then((r) => r.data),
+
+  // ============================================================
+  // NOVO: NOTIFICAÇÕES (Sino)
+  // ============================================================
+  getPendingConfirmationCount: () =>
+    api.get('/orders/pending-confirmation').then((r) => r.data),
+}
+
+// ============================================================
+// AVALIAÇÕES (NOVO)
+// ============================================================
+export const reviewApi = {
+  create: (data) =>
+    api.post('/reviews', data).then((r) => r.data),
 }
 
 // ============================================================
@@ -300,14 +321,12 @@ export const adminApi = {
     const fd = new FormData()
     fd.append('file', file)
     return api.post('/admin/uploads/image', fd).then((r) => r.data)
-    // retorna { url: "http://localhost:8081/uploads/abc.jpg" }
   },
 
   uploadVideo: (file) => {
     const fd = new FormData()
     fd.append('file', file)
     return api.post('/admin/uploads/video', fd).then((r) => r.data)
-    // retorna { url: "http://localhost:8081/uploads/xyz.mp4" }
   },
 
   // ---------- mensagens de contato ----------
@@ -329,5 +348,4 @@ export const adminApi = {
 
   auditActions: () =>
     api.get('/admin/audit/actions').then((r) => r.data),
-
 }

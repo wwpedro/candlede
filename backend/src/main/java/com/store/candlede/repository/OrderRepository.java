@@ -24,5 +24,10 @@ public interface OrderRepository
     );
 
     long countByStatus(OrderStatus status);
+    
+ // Em OrderRepository, adicione:
+    boolean existsByIdAndUserId(Long orderId, Long userId);
+    
+    long countByUserIdAndStatus(Long userId, OrderStatus status);
 
 }

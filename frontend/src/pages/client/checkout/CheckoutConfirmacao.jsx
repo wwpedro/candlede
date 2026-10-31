@@ -12,17 +12,13 @@ function formatBRL(v) {
 }
 
 function paymentMethodToApi(method) {
-  const map = {
-    pix: 'pix',
-    credit: 'credit_card',
-    debit: 'debit_card',
-  }
+  const map = { pix: 'pix', credit: 'credit_card', debit: 'debit_card' }
   return map[method] || 'pix'
 }
 
 export default function CheckoutConfirmacao() {
-  // TROCAMOS O "refresh: refreshCart" POR "clear: clearCart"
-  const { items, subtotal, clear: clearCart } = useCart() 
+  // Precisamos do refresh e do clear
+  const { items, subtotal, clear: clearCart, refresh: refreshCart } = useCart() 
   const { address, payment, reset } = useCheckout()
   const navigate = useNavigate()
 
@@ -30,7 +26,6 @@ export default function CheckoutConfirmacao() {
   const [error, setError] = useState('')
   const [cartChecked, setCartChecked] = useState(false)
 
-  // CÁLCULO DO FRETE
   const shippingPrice = useMemo(() => {
     if (!address) return 0
     return calcularFrete(address.zip, subtotal)
@@ -94,19 +89,22 @@ export default function CheckoutConfirmacao() {
 
       const result = await paymentApi.process(paymentPayload)
 
-      // AQUI: Limpa o carrinho no frontend E no backend de forma forçada
-      await clearCart() 
-      reset()
-
       if (payment.method === 'pix') {
+        // REGRA NOVA: NÃO LIMPA O CARRINHO AQUI!
+        // O carrinho só será limpo se o PIX for aprovado (na tela de Status).
+        reset() // Limpa apenas o contexto de checkout (endereço e cartão)
         navigate(`/checkout/status/${order.id}`, {
           replace: true,
           state: { transactionId: result.transactionId },
         })
       } else {
+        // CARTÃO: Se aprovou na hora, o backend já limpou. Vamos sincronizar o front.
         if (result.status === 'APPROVED') {
+          await refreshCart() // Atualiza o carrinho no React
+          reset()
           navigate(`/meus-pedidos/${order.id}`, { replace: true })
         } else {
+          // Recusado: mantém o carrinho para o cliente tentar de novo
           setError(result.statusDetail ? `Pagamento recusado: ${result.statusDetail}` : 'Pagamento recusado. Tente outro cartão.')
           setSubmitting(false)
         }

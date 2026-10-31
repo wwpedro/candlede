@@ -73,6 +73,9 @@ public class Order {
         length = 150
     )
     private String customerEmail;
+    
+    @Column(name = "delivery_confirmed_at")
+    private LocalDateTime deliveryConfirmedAt;
 
     @Column(
         name = "customer_phone",
