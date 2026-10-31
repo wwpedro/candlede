@@ -29,8 +29,8 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final InventoryRepository inventoryRepository;
     private final StockMovementRepository stockMovementRepository;
-    private final AuditService auditService;      // <-- NOVO
-    private final InputSanitizer sanitizer;       // <-- NOVO
+    private final AuditService auditService;
+    private final InputSanitizer sanitizer;
 
     // =========================================================
     // LEITURA
@@ -39,7 +39,7 @@ public class ProductService {
     @Transactional(readOnly = true)
     public List<ProductResponse> findAllPublic() {
         return productRepository
-                .findByActiveTrueOrderByNameAsc()
+                .findByActiveTrueOrderByCreatedAtDesc() // <-- ALTERADO AQUI (Mais novos primeiro)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -62,7 +62,7 @@ public class ProductService {
     @Transactional(readOnly = true)
     public List<ProductResponse> findByCategory(Long categoryId) {
         return productRepository
-                .findByCategoryIdAndActiveTrue(categoryId)
+                .findByCategoryIdAndActiveTrueOrderByCreatedAtDesc(categoryId) // <-- ALTERADO AQUI (Mais novos primeiro)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -79,7 +79,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public List<ProductResponse> findAllForAdmin() {
-        return productRepository.findAll()
+        return productRepository.findAllByOrderByCreatedAtDesc() // <-- ALTERADO AQUI (Mais novos primeiro no Admin)
                 .stream()
                 .map(this::toResponse)
                 .toList();

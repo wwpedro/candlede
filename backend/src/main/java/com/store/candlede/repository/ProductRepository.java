@@ -15,4 +15,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     List<Product> findByActiveTrueOrderByNameAsc();
 
+    List<Product> findByActiveTrueOrderByCreatedAtDesc();
+
+    List<Product> findByCategoryIdAndActiveTrueOrderByCreatedAtDesc(Long categoryId);
+
+    List<Product> findAllByOrderByCreatedAtDesc();
+
 }
