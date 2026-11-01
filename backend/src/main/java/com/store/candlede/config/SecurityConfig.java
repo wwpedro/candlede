@@ -184,11 +184,16 @@ public class SecurityConfig {
                 
                 .requestMatchers("/api/payments/simulate/**").permitAll()
                 
+                // =========================================
+                // NOVO: WEBHOOK MERCADO PAGO (Público)
+                // =========================================
+                .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
 
                 // =========================================
                 // ÁREA DO ADMIN
                 // =========================================
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.GET, "/sitemap.xml", "/api/sitemap.xml").permitAll()
 
                 // =========================================
                 // ÁREA DO CLIENTE
@@ -197,6 +202,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/orders/**").hasRole("CUSTOMER")
                 .requestMatchers("/api/users/**").hasRole("CUSTOMER")
                 .requestMatchers("/api/payments/**").hasRole("CUSTOMER")
+                
+                // ADICIONE ESTA LINHA AQUI PARA O FRETE:
+                .requestMatchers("/api/shipping/**").hasRole("CUSTOMER")
                 
              // =========================================
              // BLOQUEAR ROTAS TÉCNICAS

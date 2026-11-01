@@ -105,8 +105,8 @@ export default function MeusPedidos() {
                     </Link>
                   )}
                   
-                  {/* AVISO PARA AVALIAR */}
-                  {o.status === 'completed' && (
+                  {/* AVISO PARA AVALIAR: Só aparece se NÃO foi avaliado */}
+                  {o.status === 'completed' && !o.reviewed && (
                     <Link to={`/meus-pedidos/${o.id}`} style={{ fontSize: '12px', color: '#d35400', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       ⚠️ Avaliar pedido
                     </Link>

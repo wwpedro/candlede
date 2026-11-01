@@ -1,11 +1,10 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import CheckoutSteps from '../../../components/domain/CheckoutSteps.jsx'
 import { useCart } from '../../../context/CartContext.jsx'
 import { useCheckout } from '../../../context/CheckoutContext.jsx'
 import { orderApi, paymentApi, cartApi } from '../../../services/api.js'
 import { adaptCart } from '../../../services/adapters.js'
-import { calcularFrete } from '../../../utils/shipping.js'
 
 function formatBRL(v) {
   return `R$ ${Number(v).toFixed(2).replace('.', ',')}`
@@ -17,26 +16,25 @@ function paymentMethodToApi(method) {
 }
 
 export default function CheckoutConfirmacao() {
-  // Precisamos do refresh e do clear
   const { items, subtotal, clear: clearCart, refresh: refreshCart } = useCart() 
-  const { address, payment, reset } = useCheckout()
+  
+  // Pegando o 'shipping' do contexto
+  const { address, shipping, payment, reset } = useCheckout()
   const navigate = useNavigate()
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [cartChecked, setCartChecked] = useState(false)
 
-  const shippingPrice = useMemo(() => {
-    if (!address) return 0
-    return calcularFrete(address.zip, subtotal)
-  }, [address, subtotal])
-
+  // O valor do frete agora vem do contexto (PAC, SEDEX, etc)
+  const shippingPrice = shipping ? shipping.price : 0
   const totalComFrete = subtotal + shippingPrice
 
   useEffect(() => {
     if (!address) navigate('/checkout', { replace: true })
+    if (!shipping) navigate('/checkout', { replace: true }) // Se não tem frete, volta
     if (!payment) navigate('/checkout/pagamento', { replace: true })
-  }, [address, payment, navigate])
+  }, [address, shipping, payment, navigate])
 
   useEffect(() => {
     if (items.length === 0 && cartChecked) {
@@ -59,6 +57,7 @@ export default function CheckoutConfirmacao() {
         return
       }
 
+      // AGORA ENVIAMOS O VALOR DO FRETE PARA O BACKEND
       const orderPayload = {
         cep: address.zip,
         street: address.street,
@@ -68,6 +67,7 @@ export default function CheckoutConfirmacao() {
         city: address.city,
         state: address.state.toUpperCase().trim(),
         paymentMethod: paymentMethodToApi(payment.method).toUpperCase(),
+        shippingPrice: shipping.price // <-- Enviando o frete real
       }
 
       const order = await orderApi.create(orderPayload)
@@ -90,21 +90,17 @@ export default function CheckoutConfirmacao() {
       const result = await paymentApi.process(paymentPayload)
 
       if (payment.method === 'pix') {
-        // REGRA NOVA: NÃO LIMPA O CARRINHO AQUI!
-        // O carrinho só será limpo se o PIX for aprovado (na tela de Status).
-        reset() // Limpa apenas o contexto de checkout (endereço e cartão)
+        reset() // Limpa apenas o contexto de checkout (endereço, frete e cartão)
         navigate(`/checkout/status/${order.id}`, {
           replace: true,
           state: { transactionId: result.transactionId },
         })
       } else {
-        // CARTÃO: Se aprovou na hora, o backend já limpou. Vamos sincronizar o front.
         if (result.status === 'APPROVED') {
           await refreshCart() // Atualiza o carrinho no React
           reset()
           navigate(`/meus-pedidos/${order.id}`, { replace: true })
         } else {
-          // Recusado: mantém o carrinho para o cliente tentar de novo
           setError(result.statusDetail ? `Pagamento recusado: ${result.statusDetail}` : 'Pagamento recusado. Tente outro cartão.')
           setSubmitting(false)
         }

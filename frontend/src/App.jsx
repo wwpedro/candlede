@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Outlet } from 'react-router-dom'
 
 // layouts
 import Navbar from './components/layout/Navbar.jsx'
@@ -56,6 +56,22 @@ import AdminNotFound from './pages/admin/AdminNotFound.jsx'
 
 import NotFound from './pages/NotFound.jsx'
 
+// ============================================================
+// LAYOUT DO SITE (Navbar + Footer fixos + Outlet para a página)
+// ============================================================
+function SiteLayout() {
+  return (
+    <>
+      <Navbar />
+      <main>
+        <Outlet /> {/* A página (Home, Produtos, etc) entra aqui */}
+      </main>
+      <Footer />
+      <BackToTop />
+    </>
+  )
+}
+
 export default function App() {
   return (
     <>
@@ -101,43 +117,33 @@ export default function App() {
         </Route>
 
         {/* ================= SITE ================= */}
-        <Route
-          path="*"
-          element={
-            <>
-              <Navbar />
-              <main>
-                <Routes>
-                  {/* ---------- PÚBLICO ---------- */}
-                  <Route path="/" element={<Home />} />
-                  <Route path="/produtos" element={<Produtos />} />
-                  <Route path="/categorias/:slug" element={<Produtos />} />
-                  <Route path="/produto/:id" element={<ProdutoDetalhe />} />
-                  <Route path="/contato" element={<Contato />} />
-                  <Route path="/sobre" element={<Sobre />} />
-                  <Route path="/busca" element={<Busca />} />
+        {/* O SiteLayout envolve TODAS as páginas do site */}
+        <Route element={<SiteLayout />}>
+          
+          {/* ---------- PÚBLICO ---------- */}
+          <Route path="/" element={<Home />} />
+          <Route path="/produtos" element={<Produtos />} />
+          <Route path="/categorias/:slug" element={<Produtos />} />
+          <Route path="/produto/:id" element={<ProdutoDetalhe />} />
+          <Route path="/contato" element={<Contato />} />
+          <Route path="/sobre" element={<Sobre />} />
+          <Route path="/busca" element={<Busca />} />
 
-                  {/* ---------- PRIVADO (cliente logado) ---------- */}
-                  <Route element={<ProtectedRoute />}>
-                    <Route path="/carrinho" element={<Carrinho />} />
+          {/* ---------- PRIVADO (cliente logado) ---------- */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/carrinho" element={<Carrinho />} />
 
-                    <Route element={<AccountLayout />}>
-                      <Route path="/minha-conta" element={<MinhaConta />} />
-                      <Route path="/minha-conta/enderecos" element={<MeusEnderecos />} />
-                      <Route path="/minha-conta/dados" element={<MeusDados />} />
-                      <Route path="/meus-pedidos" element={<MeusPedidos />} />
-                      <Route path="/meus-pedidos/:id" element={<DetalhePedido />} />
-                    </Route>
-                  </Route>
+            <Route element={<AccountLayout />}>
+              <Route path="/minha-conta" element={<MinhaConta />} />
+              <Route path="/minha-conta/enderecos" element={<MeusEnderecos />} />
+              <Route path="/minha-conta/dados" element={<MeusDados />} />
+              <Route path="/meus-pedidos" element={<MeusPedidos />} />
+              <Route path="/meus-pedidos/:id" element={<DetalhePedido />} />
+            </Route>
+          </Route>
 
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </main>
-              <Footer />
-              <BackToTop />
-            </>
-          }
-        />
+          <Route path="*" element={<NotFound />} />
+        </Route>
       </Routes>
     </>
   )

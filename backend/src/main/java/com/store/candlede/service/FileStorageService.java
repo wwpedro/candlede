@@ -20,19 +20,20 @@ import java.util.UUID;
 @Service
 public class FileStorageService {
 
-    @Value("${supabase.s3.endpoint}")
+    // ADICIONADO OS DOIS PONTOS (:) NO FINAL DE CADA UM PARA NÃO QUEBRAR NO LOCALHOST
+    @Value("${supabase.s3.endpoint:}")
     private String s3Endpoint;
 
-    @Value("${supabase.s3.region}")
+    @Value("${supabase.s3.region:us-east-1}")
     private String s3Region;
 
-    @Value("${supabase.s3.access-key}")
+    @Value("${supabase.s3.access-key:}")
     private String s3AccessKey;
 
-    @Value("${supabase.s3.secret-key}")
+    @Value("${supabase.s3.secret-key:}")
     private String s3SecretKey;
 
-    @Value("${supabase.s3.bucket}")
+    @Value("${supabase.s3.bucket:produtos}")
     private String s3Bucket;
 
     private S3Client s3Client;
@@ -45,15 +46,24 @@ public class FileStorageService {
 
     @PostConstruct
     public void init() {
-        // Configura o cliente S3 apontando para o Supabase
-        s3Client = S3Client.builder()
-                .endpointOverride(URI.create(s3Endpoint))
-                .region(Region.of(s3Region))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(s3AccessKey, s3SecretKey)
-                ))
-                .forcePathStyle(true) // OBRIGATÓRIO PARA O SUPABASE
-                .build();
+        if (s3Endpoint == null || s3Endpoint.isBlank()) {
+            System.out.println("[STORAGE] ⚠️ Variáveis do Supabase S3 não encontradas. Uploads desativados neste ambiente (localhost).");
+            return;
+        }
+
+        try {
+            s3Client = S3Client.builder()
+                    .endpointOverride(URI.create(s3Endpoint))
+                    .region(Region.of(s3Region))
+                    .credentialsProvider(StaticCredentialsProvider.create(
+                            AwsBasicCredentials.create(s3AccessKey, s3SecretKey)
+                    ))
+                    .forcePathStyle(true)
+                    .build();
+            System.out.println("[STORAGE] ✅ Cliente S3 do Supabase conectado com sucesso.");
+        } catch (Exception e) {
+            System.out.println("[STORAGE] ❌ Erro ao conectar no S3: " + e.getMessage());
+        }
     }
 
     // =========================================================
@@ -76,6 +86,10 @@ public class FileStorageService {
     // MÉTODO INTERNO (Faz o upload real)
     // =========================================================
     private String store(MultipartFile file, Set<String> allowed, String errorMessage) {
+       if (s3Client == null) {
+            throw new BusinessException("O serviço de imagens está desativado no ambiente local.");
+        }
+
         if (file == null || file.isEmpty()) {
             throw new BusinessException("Arquivo vazio.");
         }
@@ -91,21 +105,16 @@ public class FileStorageService {
         }
 
         try {
-            // Gera um nome único (UUID) para o arquivo
             String filename = UUID.randomUUID().toString().replace("-", "") + "." + ext;
 
-            // Prepara o objeto que será enviado
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                     .bucket(s3Bucket)
                     .key(filename)
                     .contentType(file.getContentType())
                     .build();
 
-            // Faz o upload do arquivo para o Supabase
             s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
 
-            // Retorna a URL pública exata do Supabase
-            // O replace("/s3", "") tira o /s3 do final do endpoint para montar a URL pública correta
             return s3Endpoint.replace("/s3", "") + "/object/public/" + s3Bucket + "/" + filename;
             
         } catch (IOException e) {

@@ -20,6 +20,11 @@ public record UpdateProductRequest(
         BigDecimal price,
 
         String imageUrl,
+        
+        Double weight,
+        Double height,
+        Double width,
+        Double length,
 
         @NotNull(message = "Categoria é obrigatória")
         Long categoryId,

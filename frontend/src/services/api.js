@@ -204,6 +204,9 @@ export const orderApi = {
 export const reviewApi = {
   create: (data) =>
     api.post('/reviews', data).then((r) => r.data),
+
+  getByOrder: (orderId) =>
+    api.get(`/reviews/order/${orderId}`).then((r) => r.data),
 }
 
 // ============================================================
@@ -212,6 +215,14 @@ export const reviewApi = {
 export const contactApi = {
   send: (data) =>
     api.post('/contact', data).then((r) => r.data),
+}
+
+// ============================================================
+// FRETE DINÂMICO (Melhor Envio)
+// ============================================================
+export const shippingApi = {
+  calculate: (cep) =>
+    api.post('/shipping/calculate', { cep }).then((r) => r.data),
 }
 
 // ============================================================

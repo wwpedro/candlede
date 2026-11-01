@@ -39,7 +39,7 @@ public class ProductService {
     @Transactional(readOnly = true)
     public List<ProductResponse> findAllPublic() {
         return productRepository
-                .findByActiveTrueOrderByCreatedAtDesc() // <-- ALTERADO AQUI (Mais novos primeiro)
+                .findByActiveTrueOrderByCreatedAtDesc()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -62,7 +62,7 @@ public class ProductService {
     @Transactional(readOnly = true)
     public List<ProductResponse> findByCategory(Long categoryId) {
         return productRepository
-                .findByCategoryIdAndActiveTrueOrderByCreatedAtDesc(categoryId) // <-- ALTERADO AQUI (Mais novos primeiro)
+                .findByCategoryIdAndActiveTrueOrderByCreatedAtDesc(categoryId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -79,7 +79,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public List<ProductResponse> findAllForAdmin() {
-        return productRepository.findAllByOrderByCreatedAtDesc() // <-- ALTERADO AQUI (Mais novos primeiro no Admin)
+        return productRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -110,12 +110,17 @@ public class ProductService {
 
         Product product = Product.builder()
                 .name(safeName)
-                .description(request.description())      // descrição longa, mantém cru
+                .description(request.description())
                 .line(safeLine)
                 .price(request.price())
                 .imageUrl(request.imageUrl())
                 .active(true)
                 .category(category)
+                // ===== NOVOS CAMPOS DE FRETE =====
+                .weight(request.weight())
+                .height(request.height())
+                .width(request.width())
+                .length(request.length())
                 .build();
 
         product = productRepository.save(product);
@@ -181,6 +186,12 @@ public class ProductService {
         product.setPrice(request.price());
         product.setImageUrl(request.imageUrl());
         product.setCategory(category);
+
+        // ===== NOVOS CAMPOS DE FRETE =====
+        product.setWeight(request.weight());
+        product.setHeight(request.height());
+        product.setWidth(request.width());
+        product.setLength(request.length());
 
         if (request.active() != null) {
             product.setActive(request.active());

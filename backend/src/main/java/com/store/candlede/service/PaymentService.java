@@ -154,7 +154,6 @@ public class PaymentService {
         payment = paymentRepository.save(payment);
 
         if (aprovado) {
-            // Chama a nova regra centralizada
             finalizarPagamentoAprovado(order);
         }
 
@@ -174,15 +173,38 @@ public class PaymentService {
     }
 
     // =========================================================
-    // BUSCAR POR TRANSACTION ID
+    // BUSCAR POR TRANSACTION ID (Atualização Dinâmica do PIX)
     // =========================================================
-    @Transactional(readOnly = true)
+    @Transactional // Removido o readOnly para permitir salvar o novo status
     public PaymentResponse findByTransactionId(String transactionId) {
         com.store.candlede.entity.Payment payment =
                 paymentRepository.findByTransactionId(transactionId)
                         .orElseThrow(() ->
                                 new ResourceNotFoundException("Pagamento não encontrado.")
                         );
+
+        // NOVO: Se está pendente no banco, vai no Mercado Pago perguntar se já foi pago
+        if (payment.getStatus() == PaymentStatus.PENDING) {
+            try {
+                Payment mpPayment = mercadoPagoService.getPayment(Long.valueOf(transactionId));
+                PaymentStatus mapped = mapMpStatus(mpPayment.getStatus());
+                
+                if (mapped != PaymentStatus.PENDING) {
+                    payment.setStatus(mapped);
+                    payment.setStatusDetail(mpPayment.getStatusDetail());
+                    paymentRepository.save(payment);
+                    
+                    // Se o PIX acabou de cair, roda a regra de negócio para liberar estoque e limpar carrinho
+                    if (mapped == PaymentStatus.APPROVED) {
+                        finalizarPagamentoAprovado(payment.getOrder());
+                        log.info("✅ Polling detectou pagamento aprovado para o pedido #{}", payment.getOrder().getId());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Erro ao consultar MP no polling: {}", e.getMessage());
+            }
+        }
+
         return toResponse(payment);
     }
 
@@ -205,7 +227,6 @@ public class PaymentService {
 
         Order order = payment.getOrder();
         
-        // Chama a nova regra centralizada
         finalizarPagamentoAprovado(order);
 
         auditService.log(
@@ -252,7 +273,6 @@ public class PaymentService {
             if (mapped == PaymentStatus.APPROVED) {
                 Order order = payment.getOrder();
                 
-                // Chama a nova regra centralizada
                 finalizarPagamentoAprovado(order);
 
                 auditService.log(
@@ -291,13 +311,11 @@ public class PaymentService {
             log.info("✅ Pagamento aprovado e estoque reservado para o pedido #{}", order.getId());
             
         } catch (BusinessException e) {
-            // Se cair aqui, o estoque acabou enquanto o cliente estava no checkout/pagando
             order.setPaymentStatus(PaymentStatus.REFUNDED); 
             order.setStatus(OrderStatus.CANCELLED);
             orderRepository.save(order);
             
             log.warn("❌ Estoque esgotado ao aprovar pedido #{}. Motivo: {}", order.getId(), e.getMessage());
-            // O ideal seria enviar um e-mail pro cliente avisando do estorno aqui
         }
     }
 

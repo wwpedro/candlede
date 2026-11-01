@@ -1,5 +1,7 @@
 package com.store.candlede.dto;
 
+import java.math.BigDecimal;
+
 import com.store.candlede.enums.PaymentMethod;
 import jakarta.validation.constraints.*;
 
@@ -15,6 +17,9 @@ public record CreateOrderRequest(
         String number,
 
         String complement,
+        
+        @NotNull(message = "Frete é obrigatório")
+        BigDecimal shippingPrice,
 
         @NotBlank(message = "Bairro é obrigatório")
         String neighborhood,

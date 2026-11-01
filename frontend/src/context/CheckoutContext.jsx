@@ -4,15 +4,17 @@ const CheckoutContext = createContext(null)
 
 export function CheckoutProvider({ children }) {
   const [address, setAddress] = useState(null)
+  const [shipping, setShipping] = useState(null) // <-- NOVO: Guarda o PAC/SEDEX escolhido
   const [payment, setPayment] = useState(null)  // { method: 'pix'|'credit'|'debit', card?: {...} }
 
   const reset = () => {
     setAddress(null)
+    setShipping(null) // <-- NOVO: Limpa o frete ao finalizar
     setPayment(null)
   }
 
   return (
-    <CheckoutContext.Provider value={{ address, setAddress, payment, setPayment, reset }}>
+    <CheckoutContext.Provider value={{ address, setAddress, shipping, setShipping, payment, setPayment, reset }}>
       {children}
     </CheckoutContext.Provider>
   )

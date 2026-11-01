@@ -14,6 +14,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -26,26 +29,25 @@ public class ReviewController {
     private final ProductRepository productRepository;
     private final UserService userService;
 
+    // =========================================================
+    // CRIAR AVALIAÇÃO
+    // =========================================================
     @PostMapping
-    @Transactional // <--- ESSA LINHA É A CHAVE PARA O ERRO 500 SUMIR
+    @Transactional
     public void createReview(
             Authentication authentication,
             @RequestBody Map<String, Object> body
     ) {
         User user = userService.getEntityByEmail(authentication.getName());
         
-        // Proteção contra dados nulos
         if (body.get("orderId") == null || body.get("productId") == null || body.get("rating") == null) {
             throw new BusinessException("Dados incompletos para avaliar.");
         }
 
         Long orderId = Long.valueOf(body.get("orderId").toString());
         Long productId = Long.valueOf(body.get("productId").toString());
-        
-        // Converte o rating de forma segura
         Number ratingNum = (Number) body.get("rating");
         Integer rating = ratingNum.intValue();
-        
         String comment = (String) body.get("comment");
 
         Order order = orderRepository.findByIdAndUserId(orderId, user.getId())
@@ -55,10 +57,8 @@ public class ReviewController {
             throw new BusinessException("Você precisa confirmar o recebimento antes de avaliar.");
         }
 
-        // Agora o Hibernate consegue carregar a lista de itens sem quebrar
         boolean productInOrder = order.getItems().stream()
                 .anyMatch(item -> item.getProduct().getId().equals(productId));
-                
         if (!productInOrder) {
             throw new BusinessException("Este produto não faz parte deste pedido.");
         }
@@ -79,5 +79,21 @@ public class ReviewController {
                 .build();
 
         reviewRepository.save(review);
+    }
+
+    // =========================================================
+    // BUSCAR AVALIAÇÕES DE UM PEDIDO
+    // =========================================================
+    @GetMapping("/order/{orderId}")
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getByOrder(@PathVariable Long orderId) {
+        return reviewRepository.findByOrderId(orderId).stream()
+                .map(r -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("productId", r.getProduct().getId());
+                    map.put("rating", r.getRating());
+                    return map;
+                })
+                .toList();
     }
 }

@@ -197,6 +197,7 @@ export function adaptOrder(apiOrder) {
     id: apiOrder.id,
     date: apiOrder.createdAt,
     status: STATUS_TO_FRONT[apiOrder.status] || apiOrder.status,
+    reviewed: apiOrder.reviewed ?? false,
     items: (apiOrder.items || []).map(adaptOrderItem),
 
     subtotal: Number(apiOrder.subtotal) || 0,

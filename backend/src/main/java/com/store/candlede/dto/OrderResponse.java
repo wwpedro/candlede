@@ -36,7 +36,9 @@ public record OrderResponse(
 
         List<OrderItemResponse> items,
 
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        
+        Boolean reviewed
 
 ) {
 }

@@ -23,6 +23,11 @@ public record CreateProductRequest(
 
         @NotNull(message = "Categoria é obrigatória")
         Long categoryId,
+        
+        Double weight,
+        Double height,
+        Double width,
+        Double length,
 
         @NotNull(message = "Estoque inicial é obrigatório")
         @PositiveOrZero(message = "Estoque não pode ser negativo")
@@ -31,6 +36,8 @@ public record CreateProductRequest(
         @NotNull(message = "Estoque mínimo é obrigatório")
         @PositiveOrZero(message = "Estoque mínimo não pode ser negativo")
         Integer minimumStock
+        
+        
 
 ) {
 }

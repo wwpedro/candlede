@@ -1,12 +1,11 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CheckoutSteps from '../../../components/domain/CheckoutSteps.jsx'
 import OrderSummary from '../../../components/domain/OrderSummary.jsx'
 import { useCart } from '../../../context/CartContext.jsx'
 import { useCheckout } from '../../../context/CheckoutContext.jsx'
-import { addressApi } from '../../../services/api.js'
+import { addressApi, shippingApi } from '../../../services/api.js'
 import { adaptAddressList, toApiAddress } from '../../../services/adapters.js'
-import { calcularFrete } from '../../../utils/shipping.js' // <-- IMPORTANDO A FUNÇÃO
 
 const EMPTY = {
   zip: '', street: '', number: '', complement: '',
@@ -15,7 +14,7 @@ const EMPTY = {
 
 export default function Checkout() {
   const { items, subtotal } = useCart()
-  const { address, setAddress } = useCheckout()
+  const { address, setAddress, shipping, setShipping } = useCheckout()
   const navigate = useNavigate()
 
   const [list, setList] = useState([])
@@ -24,11 +23,9 @@ export default function Checkout() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // CÁLCULO DINÂMICO: Usa o CEP do endereço selecionado OU o CEP que está sendo digitado no formulário
-  const shippingPrice = useMemo(() => {
-    const cepParaCalculo = address ? address.zip : form.zip
-    return calcularFrete(cepParaCalculo, subtotal)
-  }, [address, form.zip, subtotal])
+  // Estados para o Frete Dinâmico
+  const [shippingOptions, setShippingOptions] = useState([])
+  const [calculatingShipping, setCalculatingShipping] = useState(false)
 
   useEffect(() => {
     if (items.length === 0) navigate('/carrinho', { replace: true })
@@ -53,6 +50,34 @@ export default function Checkout() {
     return () => { mounted = false }
   }, []) // eslint-disable-line
 
+  // =========================================================
+  // BUSCA AS OPÇÕES DE FRETE NO BACKEND (Melhor Envio)
+  // =========================================================
+  useEffect(() => {
+    if (!address?.zip) {
+      setShippingOptions([])
+      setShipping(null)
+      return
+    }
+
+    setCalculatingShipping(true)
+    setShippingOptions([])
+    setShipping(null)
+    setError('')
+
+    shippingApi.calculate(address.zip)
+      .then((options) => {
+        setShippingOptions(options)
+        // Se só tiver uma opção (ex: só PAC), já seleciona automaticamente
+        if (options.length === 1) setShipping(options[0])
+      })
+      .catch((err) => {
+        console.error("Erro no frete:", err)
+        setError("Não foi possível calcular o frete para este CEP. Verifique o endereço.")
+      })
+      .finally(() => setCalculatingShipping(false))
+  }, [address?.zip, setShipping]) // eslint-disable-line
+
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value })
 
@@ -72,7 +97,7 @@ export default function Checkout() {
   }
 
   const handleContinue = () => {
-    if (!address) return
+    if (!address || !shipping) return
     navigate('/checkout/pagamento')
   }
 
@@ -109,7 +134,7 @@ export default function Checkout() {
                     className={`address-option${isSelected(a) ? ' is-selected' : ''}`}
                     onClick={() => {
                       setAddress(a)
-                      setEditing(false) // Fecha o form se estiver aberto
+                      setEditing(false)
                     }}
                   >
                     <span className="address-option__radio" aria-hidden="true" />
@@ -126,14 +151,54 @@ export default function Checkout() {
                 ))}
               </div>
 
+              {/* =========================================================
+                  SEÇÃO DE FRETE DINÂMICO
+                  ========================================================= */}
+              {address && (
+                <div style={{ marginTop: 32 }}>
+                  <h2 className="section-label">Opções de Entrega</h2>
+                  
+                  {calculatingShipping ? (
+                    <p className="text-muted" style={{ padding: '16px 0' }}>
+                      Calculando frete para o CEP {address.zip}...
+                    </p>
+                  ) : shippingOptions.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {shippingOptions.map((opt) => (
+                        <button
+                          key={opt.name}
+                          type="button"
+                          className={`address-option${shipping?.name === opt.name ? ' is-selected' : ''}`}
+                          onClick={() => setShipping(opt)}
+                        >
+                          <span className="address-option__radio" aria-hidden="true" />
+                          <div className="address-option__body" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                            <div>
+                              <p style={{ fontWeight: 600, margin: 0 }}>{opt.company} - {opt.name}</p>
+                              <p className="text-muted" style={{ margin: 0 }}>Até {opt.deliveryTime} dias úteis</p>
+                            </div>
+                            <p style={{ fontWeight: 600, margin: 0 }}>
+                              {opt.price === 0 ? 'Grátis' : `R$ ${opt.price.toFixed(2).replace('.', ',')}`}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted">Nenhuma transportadora disponível para este CEP.</p>
+                  )}
+                </div>
+              )}
+
               {!editing && (
                 <button
                   type="button"
                   className="link-quiet address-options__add"
                   onClick={() => {
                     setEditing(true)
-                    setAddress(null) // Tira a seleção do antigo para calcular o novo
+                    setAddress(null)
                   }}
+                  style={{ marginTop: 24 }}
                 >
                   + Adicionar novo endereço
                 </button>
@@ -176,7 +241,12 @@ export default function Checkout() {
           )}
         </div>
 
-        <OrderSummary onContinue={handleContinue} disabled={!address} shipping={shippingPrice} />
+        {/* O resumo agora recebe o valor real do frete selecionado */}
+        <OrderSummary 
+          onContinue={handleContinue} 
+          disabled={!address || !shipping} 
+          shipping={shipping ? shipping.price : null} 
+        />
       </div>
     </div>
   )

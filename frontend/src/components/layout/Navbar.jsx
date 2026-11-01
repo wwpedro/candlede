@@ -57,8 +57,22 @@ export default function Navbar() {
         .then((res) => setPendingOrders(res.count))
         .catch((err) => console.error("Erro ao buscar notificações", err))
     } else {
-      setPendingOrders(0) // Se não for cliente, esconde o sino
+      setPendingOrders(0)
     }
+  }, [user])
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      if (user && user.role === 'customer') {
+        orderApi.getPendingConfirmationCount()
+          .then((res) => setPendingOrders(res.count))
+          .catch((err) => console.error("Erro ao atualizar notificações", err))
+      }
+    }
+
+    window.addEventListener('candlede:refresh-notifications', handleRefresh)
+    
+    return () => window.removeEventListener('candlede:refresh-notifications', handleRefresh)
   }, [user])
 
   const linkClass = ({ isActive }) =>

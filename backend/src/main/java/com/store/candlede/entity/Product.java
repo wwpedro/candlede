@@ -66,6 +66,18 @@ public class Product {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+    
+    @Column(name = "weight")
+    private Double weight; // em kg
+
+    @Column(name = "height")
+    private Double height; // em cm
+
+    @Column(name = "width")
+    private Double width; // em cm
+
+    @Column(name = "length")
+    private Double length; // em cm
 
     @PrePersist
     protected void onCreate() {

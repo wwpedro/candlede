@@ -15,6 +15,8 @@ import com.store.candlede.exception.BusinessException;
 import com.store.candlede.exception.ResourceNotFoundException;
 import com.store.candlede.repository.CartRepository;
 import com.store.candlede.repository.OrderRepository;
+import com.store.candlede.repository.ReviewRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.SimpleMailMessage;
@@ -38,14 +40,15 @@ public class OrderService {
     private final CartService cartService;
     private final InventoryService inventoryService;
     private final AuditService auditService;
-    private final ShippingService shippingService;
-    private final JavaMailSender mailSender; // <-- IMPORTANTE: Injeção do envio de e-mail
+    private final ShippingService shippingService; // Mantido caso você queira usar para validação futura
+    private final JavaMailSender mailSender;
+    private final ReviewRepository reviewRepository;
 
     @Transactional
     public OrderResponse create(Long userId, CreateOrderRequest request) {
         User user = userService.getEntityById(userId);
         Cart cart = cartService.getOrCreateCart(userId);
-
+        
         if (cart.getItems().isEmpty()) {
             throw new BusinessException("Não é possível realizar um pedido com o carrinho vazio.");
         }
@@ -68,7 +71,13 @@ public class OrderService {
             subtotal = subtotal.add(itemSubtotal);
         }
 
-        BigDecimal shippingPrice = shippingService.calcularFrete(request.cep(), subtotal);
+        // =========================================================
+        // ALTERAÇÃO AQUI: Pega o frete escolhido no frontend
+        // =========================================================
+        BigDecimal shippingPrice = request.shippingPrice() != null 
+                ? request.shippingPrice() 
+                : BigDecimal.ZERO;
+        
         BigDecimal total = subtotal.add(shippingPrice);
 
         Order order = Order.builder()
@@ -215,11 +224,15 @@ public class OrderService {
                 .map(item -> new OrderItemResponse(item.getId(), item.getProduct().getId(), item.getProductName(), item.getProduct().getImageUrl(), item.getQuantity(), item.getUnitPrice(), item.getSubtotal()))
                 .toList();
 
+        long reviewCount = reviewRepository.countByOrderId(order.getId());
+        boolean isFullyReviewed = order.getItems().size() > 0 && reviewCount >= order.getItems().size();
+
         return new OrderResponse(
                 order.getId(), order.getUser().getId(), order.getCustomerName(), order.getCustomerEmail(), order.getCustomerPhone(),
                 order.getSubtotal(), order.getShippingPrice(), order.getTotal(), order.getStatus(), order.getPaymentStatus(),
                 order.getPaymentMethod(), order.getCep(), order.getStreet(), order.getNumber(), order.getComplement(),
-                order.getNeighborhood(), order.getCity(), order.getState(), items, order.getCreatedAt()
+                order.getNeighborhood(), order.getCity(), order.getState(), items, order.getCreatedAt(),
+                isFullyReviewed 
         );
     }
 }

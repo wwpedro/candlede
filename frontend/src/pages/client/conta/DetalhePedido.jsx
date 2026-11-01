@@ -36,9 +36,25 @@ export default function DetalhePedido() {
   // Estados para as avaliações
   const [reviewsState, setReviewsState] = useState({})
 
+  // =========================================================
+  // CARREGA PEDIDO E AVALIAÇÕES EXISTENTES
+  // =========================================================
   const loadOrder = () => {
-    orderApi.get(id)
-      .then((data) => setOrder(adaptOrder(data)))
+    setLoading(true)
+    Promise.all([
+      orderApi.get(id),
+      reviewApi.getByOrder(id).catch(() => []) // Se der erro, retorna lista vazia
+    ])
+      .then(([orderData, existingReviews]) => {
+        setOrder(adaptOrder(orderData))
+        
+        // Popula o estado com as avaliações que já foram feitas
+        const state = {}
+        existingReviews.forEach(r => {
+          state[r.productId] = { submitted: true, rating: r.rating, comment: '' }
+        })
+        setReviewsState(state)
+      })
       .catch((err) => {
         console.error(err)
         setError('Pedido não encontrado.')
@@ -100,6 +116,10 @@ export default function DetalhePedido() {
         ...prev,
         [productId]: { ...prev[productId], loading: false, submitted: true }
       }))
+
+      // MÁGICA AQUI: Avisa o Navbar para atualizar o sino de notificações
+      window.dispatchEvent(new Event('candlede:refresh-notifications'))
+
     } catch (err) {
       alert(err.response?.data?.message || "Erro ao enviar avaliação.")
       setReviewsState(prev => ({
@@ -133,6 +153,16 @@ export default function DetalhePedido() {
   if (order.status === 'received' && isPaid) currentIndex = 1
 
   const showPreparingNotice = isPaid && order.status === 'received' && !isCanceled
+
+  // =========================================================
+  // MÁGICA AQUI: Ordena os itens não avaliados para o topo
+  // =========================================================
+  const sortedItems = [...order.items].sort((a, b) => {
+    const aReviewed = reviewsState[a.productId]?.submitted
+    const bReviewed = reviewsState[b.productId]?.submitted
+    if (aReviewed === bReviewed) return 0
+    return aReviewed ? 1 : -1 // Se 'a' foi avaliado, ele vai para baixo
+  })
 
   return (
     <div className="account-page">
@@ -201,7 +231,8 @@ export default function DetalhePedido() {
       <section className="order-section">
         <h2 className="section-label">Produtos</h2>
         <div className="order-items">
-          {order.items.map((it) => {
+          {/* AQUI USAMOS O sortedItems */}
+          {sortedItems.map((it) => {
             const state = reviewsState[it.productId] || { rating: 0, comment: '', submitted: false, loading: false }
 
             return (
