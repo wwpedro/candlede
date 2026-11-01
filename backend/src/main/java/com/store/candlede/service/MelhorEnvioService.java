@@ -12,6 +12,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
@@ -42,7 +43,6 @@ public class MelhorEnvioService {
         payload.put("from", Map.of("postal_code", originCep.replaceAll("\\D", "")));
         payload.put("to", Map.of("postal_code", destinationCep.replaceAll("\\D", "")));
 
-        // AQUI ESTÁ A CORREÇÃO (Usando HashMap em vez de Map.of)
         List<Map<String, Object>> productsPayload = items.stream().map(item -> {
             Product p = item.getProduct();
             
@@ -65,6 +65,7 @@ public class MelhorEnvioService {
         headers.setBearerAuth(token);
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Accept", "application/json");
+        // User-Agent obrigatório pela documentação
         headers.set("User-Agent", "Candlede (candledecontato@gmail.com)");
         
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
@@ -95,8 +96,12 @@ public class MelhorEnvioService {
                 })
                 .toList();
 
+        } catch (HttpStatusCodeException e) {
+            System.err.println("Erro Melhor Envio: " + e.getResponseBodyAsString());
+            throw new BusinessException("Melhor Envio recusou: " + e.getResponseBodyAsString());
         } catch (Exception e) {
-            throw new BusinessException("Erro ao calcular frete no Melhor Envio: " + e.getMessage());
+            System.err.println("Erro de Conexão: " + e.getMessage());
+            throw new BusinessException("Erro de conexão com Melhor Envio. Tente novamente mais tarde.");
         }
     }
 }

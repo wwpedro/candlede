@@ -10,8 +10,11 @@ import com.store.candlede.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
-import org.springframework.transaction.annotation.Transactional; // <-- IMPORTANTE
-import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
@@ -29,7 +32,7 @@ public class ShippingController {
     private String originCep;
 
     @PostMapping("/calculate")
-    @Transactional // <-- ESSA LINHA RESOLVE O ERRO "NO SESSION"
+    @Transactional // <-- Mantém a sessão do banco aberta para ler os itens do carrinho
     public List<ShippingOption> calculate(
             Authentication authentication,
             @RequestBody Map<String, String> body
@@ -47,11 +50,15 @@ public class ShippingController {
                 throw new BusinessException("O carrinho está vazio.");
             }
 
+            // Chama o serviço que agora captura os erros reais do Melhor Envio
             return melhorEnvioService.calculateShipping(originCep, destinationCep, cart.getItems());
+
         } catch (BusinessException e) {
-            throw e;
+            // Repassa a mensagem exata que veio do Melhor Envio (ex: "Token inválido", "CEP não atendido")
+            throw e; 
         } catch (Exception e) {
-            throw new BusinessException("Erro ao calcular frete: " + e.getMessage());
+            // Se for um erro totalmente inesperado (ex: NullPointerException), avisa o cliente
+            throw new BusinessException("Erro interno ao calcular frete: " + e.getMessage());
         }
     }
 }
