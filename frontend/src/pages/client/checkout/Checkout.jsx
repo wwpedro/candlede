@@ -60,28 +60,38 @@ export default function Checkout() {
       return
     }
 
+    let cancelled = false
+
     setCalculatingShipping(true)
     setShippingOptions([])
-    setShipping(null)
     setError('')
 
     shippingApi.calculate(address.zip)
       .then((options) => {
+        if (cancelled) return
+
         // FILTRO AQUI: Mantém apenas as opções dos Correios (PAC, SEDEX)
-        const correiosOptions = options.filter(opt => 
+        const correiosOptions = options.filter(opt =>
           opt.company && opt.company.toLowerCase().includes('correios')
         )
 
         setShippingOptions(correiosOptions)
-        
-        // Se só tiver uma opção (ex: só PAC), já seleciona automaticamente
-        if (correiosOptions.length === 1) setShipping(correiosOptions[0])
+
+        setShipping((prev) => {
+          if (prev && correiosOptions.some(o => o.name === prev.name)) return prev
+          return correiosOptions.length === 1 ? correiosOptions[0] : null
+        })
       })
       .catch((err) => {
+        if (cancelled) return
         console.error("Erro no frete:", err)
         setError("Não foi possível calcular o frete para este CEP. Verifique o endereço.")
       })
-      .finally(() => setCalculatingShipping(false))
+      .finally(() => {
+        if (!cancelled) setCalculatingShipping(false)
+      })
+
+    return () => { cancelled = true }
   }, [address?.zip, setShipping]) // eslint-disable-line
 
   const handleChange = (e) =>
@@ -189,6 +199,19 @@ export default function Checkout() {
                           </div>
                         </button>
                       ))}
+
+                      {/* AVISO APENAS AQUI - SEM EMOJIS E EM UM SÓ TEXTO */}
+                      <div className="order-notice" style={{ marginTop: 12 }}>
+                        <div className="order-notice__content">
+                          <p className="order-notice__text">
+                            O prazo de entrega é válido assim que o status do seu pedido estiver como{' '}
+                            <strong>enviado</strong>. Levamos de 2 a 3 dias para preparar seu pedido.
+                            Para acompanhar, acesse <strong>seu perfil</strong> e clique na aba{' '}
+                            <strong>Meus Pedidos</strong>.
+                          </p>
+                        </div>
+                      </div>
+
                     </div>
                   ) : (
                     <p className="text-muted">Nenhuma transportadora disponível para este CEP.</p>

@@ -28,7 +28,7 @@ const FALLBACK_RITUAL = {
   text: 'Cada produto foi pensado como um pequeno ritual. Aromas que convidam à pausa, ao cuidado e à presença.',
   buttonText: 'Explorar Coleção',
   buttonLink: '/categorias/cuidados-com-a-pele',
-  image: '/images/ritual.jpeg', 
+  image: '/images/ritual.png', 
 }
 
 export default function Home() {
