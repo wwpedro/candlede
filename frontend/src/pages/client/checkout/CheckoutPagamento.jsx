@@ -1,11 +1,10 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import CheckoutSteps from '../../../components/domain/CheckoutSteps.jsx'
 import OrderSummary from '../../../components/domain/OrderSummary.jsx'
 import CardPaymentForm from '../../../components/domain/CardPaymentForm.jsx'
 import { useCart } from '../../../context/CartContext.jsx'
 import { useCheckout } from '../../../context/CheckoutContext.jsx'
-import { calcularFrete } from '../../../utils/shipping.js'
 
 const METHODS = [
   { key: 'pix',    title: 'PIX',               desc: 'Pagamento instantâneo. Aprovação após confirmação.' },
@@ -15,25 +14,25 @@ const METHODS = [
 
 export default function CheckoutPagamento() {
   const { items, subtotal } = useCart()
-  const { address, payment, setPayment } = useCheckout()
+  const { address, shipping, payment, setPayment } = useCheckout()
   const navigate = useNavigate()
 
   const [method, setMethod] = useState(payment?.method || 'pix')
   const [cardTokenData, setCardTokenData] = useState(null)
   const [brickError, setBrickError] = useState('')
 
-  // CÁLCULO DO FRETE BASEADO NO ENDEREÇO ESCOLHIDO
-  const shippingPrice = useMemo(() => {
-    if (!address) return null
-    return calcularFrete(address.zip, subtotal)
-  }, [address, subtotal])
-
+  // Frete real selecionado na etapa anterior (vindo do CheckoutContext).
+  // `?? null` distingue "não calculado" (null) de "grátis" (0).
+  const shippingPrice = shipping?.price ?? null
   const totalComFrete = subtotal + (shippingPrice || 0)
 
+  // Se o usuário chegar aqui sem endereço ou sem frete escolhido,
+  // volta para a etapa anterior. Também protege contra carrinho vazio.
   useEffect(() => {
     if (!address) navigate('/checkout', { replace: true })
-    if (items.length === 0) navigate('/carrinho', { replace: true })
-  }, [address, items.length, navigate])
+    else if (!shipping) navigate('/checkout', { replace: true })
+    else if (items.length === 0) navigate('/carrinho', { replace: true })
+  }, [address, shipping, items.length, navigate])
 
   const handlePixContinue = () => {
     setPayment({ method: 'pix' })
@@ -96,7 +95,7 @@ export default function CheckoutPagamento() {
                 🔒 Os dados são criptografados pelo Mercado Pago e não passam pelos nossos servidores.
               </p>
               <CardPaymentForm
-                amount={totalComFrete} 
+                amount={totalComFrete}
                 onSubmit={handleCardSubmit}
                 onError={() => setBrickError('Erro ao processar cartão. Tente novamente.')}
               />

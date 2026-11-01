@@ -67,7 +67,7 @@ export default function ProdutoDetalhe() {
     }
     try {
       await add(product)
-      setFeedback('Adicionado à sacola ✓')
+      setFeedback('Adicionado ao carrinho')
       setTimeout(() => setFeedback(''), 2000)
     } catch (err) {
       setFeedback(err.response?.data?.message || err.message)
@@ -195,7 +195,7 @@ export default function ProdutoDetalhe() {
                 className="btn btn--primary"
                 disabled={soldOut}
               >
-                {soldOut ? 'Produto esgotado' : 'Adicionar à sacola'}
+                {soldOut ? 'Produto esgotado' : 'Adicionar ao carrinho'}
               </button>
 
               <Link to="/carrinho" className="btn btn--ghost">

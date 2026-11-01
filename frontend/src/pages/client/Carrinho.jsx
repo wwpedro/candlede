@@ -36,7 +36,7 @@ export default function Carrinho() {
           <h1 className="cart-title">Seu Carrinho</h1>
           <hr className="hairline" />
           <div className="cart-empty__body">
-            <p>Sua sacola está vazia.</p>
+            <p>Seu carrinho está vazio.</p>
             <Link to="/produtos" className="btn btn--ghost">
               continuar comprando
             </Link>
