@@ -65,6 +65,7 @@ public class MelhorEnvioService {
         headers.setBearerAuth(token);
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Accept", "application/json");
+        headers.set("User-Agent", "Candlede (candledecontato@gmail.com)");
         
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
 
