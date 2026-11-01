@@ -67,9 +67,15 @@ export default function Checkout() {
 
     shippingApi.calculate(address.zip)
       .then((options) => {
-        setShippingOptions(options)
+        // FILTRO AQUI: Mantém apenas as opções dos Correios (PAC, SEDEX)
+        const correiosOptions = options.filter(opt => 
+          opt.company && opt.company.toLowerCase().includes('correios')
+        )
+
+        setShippingOptions(correiosOptions)
+        
         // Se só tiver uma opção (ex: só PAC), já seleciona automaticamente
-        if (options.length === 1) setShipping(options[0])
+        if (correiosOptions.length === 1) setShipping(correiosOptions[0])
       })
       .catch((err) => {
         console.error("Erro no frete:", err)
