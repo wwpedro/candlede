@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
 
 // Inicializa o SDK uma única vez
@@ -40,7 +40,10 @@ export default function CardPaymentForm({
         },
       },
       paymentMethods: {
-        maxInstallments: 3,
+        // minInstallments é o que faz o seletor de parcelas aparecer
+        minInstallments: 1,
+        // 12x é o padrão do mercado — ajuste conforme sua política
+        maxInstallments: 12,
       },
     }),
     []
@@ -53,7 +56,7 @@ export default function CardPaymentForm({
       },
       onSubmit: async (formData, additionalData) => {
         // formData.token = token seguro do cartão
-        // Envia pro backend
+        // Envia pro backend (que já recebe e repassa pro Mercado Pago)
         await onSubmit({
           token: formData.token,
           paymentMethodId: formData.payment_method_id,
